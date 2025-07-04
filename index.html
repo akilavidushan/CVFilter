@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CV Filter Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #f8f8f0;
+      font-family: 'Outfit', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 30px;
+      max-width: 550px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    h2 {
+      font-weight: 800;
+      font-size: 2rem;
+      margin-bottom: 10px;
+      color: #111;
+    }
+
+    .subtext {
+      font-weight: 300;
+      color: #666;
+      margin-bottom: 25px;
+      font-size: 0.95rem;
+    }
+
+    /* Custom rounded file upload button */
+    .custom-file-upload {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #000000;
+      border-radius: 999px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      font-weight: 600;
+      width: 100%;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #ffffff;
+    }
+
+    .custom-file-upload:hover {
+      background-color: #414040;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    textarea {
+      border: none;
+      background-color: #f8f8f8;
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      font-size: 1.1rem;
+      height: 200px;
+      resize: vertical;
+      margin-bottom: 20px;
+    }
+
+    textarea::placeholder {
+      color: #aaa;
+    }
+
+    button {
+      background-color: #111;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 40px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #333;
+      cursor: pointer;
+    }
+
+    #results {
+      margin-top: 30px;
+    }
+
+    #downloadSection a {
+      display: inline-block;
+      margin-top: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      color: #1a73e8;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 25px 20px;
+      }
+
+      h2 {
+        font-size: 1.75rem;
+      }
+
+      textarea {
+        height: 160px;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>CV FILTER</h2>
+    <p class="subtext">Upload ZIP of CVs (PDF or Word)</p>
+
+    <!-- Upload Form -->
+    <form id="cvForm" enctype="multipart/form-data">
+      <label for="cvZip" id="fileButton" class="custom-file-upload">SELECT FILE</label>
+      <input type="file" id="cvZip" name="cvZip" accept=".zip" required />
+
+      <textarea id="prompt" name="prompt" placeholder="Enter Requirements" required></textarea>
+      <button type="submit">SUBMIT</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("cvForm");
+    const submitButton = form.querySelector("button");
+    const fileInput = document.getElementById("cvZip");
+    const fileButton = document.getElementById("fileButton");
+
+    let downloadUrl = null;
+    let filtered = false;
+
+    // Show chosen file name on button
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        const fileName = fileInput.files[0].name;
+        fileButton.innerText = `SELECTED FILE - ${fileName}`;
+      } else {
+        fileButton.innerText = "NO SELECTED FILE";
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      // If already filtered, download
+      if (filtered && downloadUrl) {
+        submitButton.innerText = "Downloading...";
+        submitButton.disabled = true;
+
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = "";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+        return;
+      }
+
+      // Filtering in progress
+      submitButton.disabled = true;
+      submitButton.innerText = "Filtering...";
+
+      const formData = new FormData();
+      formData.append("cvZip", fileInput.files[0]);
+      formData.append("prompt", document.getElementById("prompt").value);
+
+      try {
+        const res = await fetch("http://127.0.0.1:8000/filter", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!res.ok) throw new Error("Filtering failed");
+
+        const data = await res.json();
+        downloadUrl = data.download_url;
+        filtered = true;
+
+        submitButton.innerText = "Download CVs";
+        submitButton.disabled = false;
+
+        const stats = document.createElement("p");
+        stats.innerText = `${data.passed} out of ${data.total} CVs matched`;
+        stats.style.marginTop = "15px";
+        stats.style.color = "#333";
+        form.appendChild(stats);
+
+      } catch (err) {
+        alert("Error filtering CVs. Please try again.");
+        console.error(err);
+        submitButton.disabled = false;
+        submitButton.innerText = "Submit";
+      }
+    });
+  </script>
+</body>
+</html>
